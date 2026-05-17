@@ -13,6 +13,37 @@ from typing import Any, Generator, Optional
 from .base import BaseProvider, ChatResponse, MessageInput, TextChunkCallback
 
 
+def _sanitize_messages_for_strict_apis(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sanitize messages so they're accepted by stricter OpenAI-compatible APIs.
+
+    OpenAI itself accepts assistant messages where `content` is null or empty as
+    long as `tool_calls` is present. Several other providers (notably Moonshot/
+    Kimi `moonshot-v1-*`) reject those requests with:
+      'Invalid request: the message at position N with role assistant must not
+       be empty'
+
+    Fix: for assistant messages that have tool_calls but missing/empty content,
+    substitute a single space. This is a no-op for compliant providers and
+    unblocks the strict ones. We deliberately do not mutate the input list.
+    """
+    sanitized: list[dict[str, Any]] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            sanitized.append(msg)
+            continue
+        if msg.get("role") != "assistant":
+            sanitized.append(msg)
+            continue
+        content = msg.get("content")
+        has_tool_calls = bool(msg.get("tool_calls"))
+        # Empty / null content paired with a tool call → substitute a space.
+        if has_tool_calls and (content is None or content == "" or content == []):
+            sanitized.append({**msg, "content": " "})
+            continue
+        sanitized.append(msg)
+    return sanitized
+
+
 def _convert_to_openai_tool_schema(anthropic_tool: dict[str, Any]) -> dict[str, Any] | None:
     """Convert Anthropic tool schema to OpenAI/GLM/Minimax function format.
 
@@ -109,6 +140,7 @@ class OpenAICompatibleProvider(BaseProvider):
 
         # Convert messages
         provider_messages = self._prepare_messages(messages)
+        provider_messages = _sanitize_messages_for_strict_apis(provider_messages)
 
         # Convert tools to OpenAI format
         extra_kwargs: dict[str, Any] = {}
@@ -179,6 +211,7 @@ class OpenAICompatibleProvider(BaseProvider):
 
         # Convert messages
         provider_messages = self._prepare_messages(messages)
+        provider_messages = _sanitize_messages_for_strict_apis(provider_messages)
 
         # Convert tools to OpenAI format
         extra_kwargs: dict[str, Any] = {}
@@ -209,6 +242,7 @@ class OpenAICompatibleProvider(BaseProvider):
         """Stream OpenAI-compatible chunks while rebuilding the final response."""
         model = self._get_model(**kwargs)
         provider_messages = self._prepare_messages(messages)
+        provider_messages = _sanitize_messages_for_strict_apis(provider_messages)
 
         extra_kwargs: dict[str, Any] = {}
         if tools:
