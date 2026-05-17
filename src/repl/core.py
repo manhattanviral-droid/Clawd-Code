@@ -130,6 +130,14 @@ class ClawdREPL:
         self.tool_registry = build_default_registry()
         self.tool_context = ToolContext(workspace_root=Path.cwd())
         self.tool_context.ask_user = self._ask_user_questions
+
+        # Manhattan Viral fork: auto-load MCP servers from project .mcp.json
+        # (upstream ships the MCP dispatcher but not the server connector layer).
+        try:
+            from src.tool_system.mcp_loader import load_mcp_clients
+            self.tool_context.mcp_clients.update(load_mcp_clients(Path.cwd()))
+        except Exception as _mcp_err:
+            print(f"[clawd-py] MCP loader skipped: {_mcp_err}")
         # Permission handler with status control for proper input handling
         self._current_status = None
         self.tool_context.permission_handler = self._handle_permission_request
