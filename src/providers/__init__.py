@@ -106,6 +106,27 @@ PROVIDER_INFO: dict[str, ProviderInfo] = {
             "MiniMax-M2",
         ],
     },
+    "deepseek": {
+        "label": "DeepSeek",
+        "default_base_url": "https://api.deepseek.com",
+        "default_model": "deepseek-chat",
+        "available_models": [
+            "deepseek-chat",       # V3.1 hybrid, supports tool calling
+            "deepseek-reasoner",   # R1 chain-of-thought, NO tool calling
+        ],
+    },
+    "moonshot": {
+        "label": "Moonshot / Kimi",
+        "default_base_url": "https://api.moonshot.ai/v1",
+        "default_model": "kimi-k2-0905-preview",
+        "available_models": [
+            "kimi-k2-0905-preview",
+            "kimi-k2-turbo-preview",
+            "moonshot-v1-8k",
+            "moonshot-v1-32k",
+            "moonshot-v1-128k",
+        ],
+    },
 }
 
 
@@ -134,6 +155,14 @@ def get_provider_class(provider_name: str):
         from .minimax_provider import MinimaxProvider
 
         return MinimaxProvider
+    if provider_name == "deepseek":
+        from .deepseek_provider import DeepSeekProvider
+
+        return DeepSeekProvider
+    if provider_name == "moonshot":
+        from .moonshot_provider import MoonshotProvider
+
+        return MoonshotProvider
     raise ValueError(f"Unknown provider: {provider_name}")
 
 
