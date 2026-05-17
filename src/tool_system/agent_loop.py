@@ -273,6 +273,32 @@ def run_agent_loop(
             "input_schema": spec.input_schema,
         })
 
+    # Tool budget cap.
+    #
+    # Some providers (notably Moonshot v1 series) tokenize-fail when given
+    # large tools[] arrays (~20+). Clawd-py auto-injects every built-in plus
+    # every MCP tool, which can hit 40+ tools per turn. To stay within
+    # those limits we cap the schemas. Default cap = 20 (Moonshot-safe);
+    # override with env CLAWD_TOOL_BUDGET=0 to disable, or any positive int.
+    import os as _os
+    _budget_env = _os.environ.get("CLAWD_TOOL_BUDGET", "20")
+    try:
+        _budget = int(_budget_env)
+    except ValueError:
+        _budget = 20
+    if _budget > 0 and len(tool_schemas) > _budget:
+        # Keep built-ins first (they appear first in registry), drop overflow.
+        # MCP tools are registered last by mcp_loader, so they're dropped first.
+        _dropped = len(tool_schemas) - _budget
+        tool_schemas = tool_schemas[:_budget]
+        try:
+            from rich import print as _rprint
+            _rprint(f"[yellow][clawd-py][/yellow] tool budget {_budget} "
+                    f"applied; dropped {_dropped} overflow tools "
+                    f"(set CLAWD_TOOL_BUDGET=0 to disable)")
+        except Exception:
+            print(f"[clawd-py] tool budget {_budget} applied; dropped {_dropped} tools")
+
     # For OpenAI/GLM, keep separate message list in OpenAI format
     openai_messages: list[dict[str, Any]] = []
     last_user_visible_message: str | None = None
